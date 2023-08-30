@@ -11,6 +11,7 @@ typedef struct {
     size_t pos;
     int loop_counter;
     bool cmp_flags_set;
+    bool rax_contains_copy;
 } Emitter;
 
 Emitter emitter_create(uint8_t* code_address);

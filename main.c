@@ -10,13 +10,27 @@
 #include <string.h>
 #include <sys/mman.h>
 
+#define ADD_OPTIMIZATION_WO_FREE_AST(NAME)                                     \
+    previous_ast = ast;                                                        \
+    ast = optimize_##NAME(&ast);                                               \
+    printf("%s" #NAME ":%s\n", color_bold, color_reset);                       \
+    if (!expr_vec_equal(&ast, &previous_ast)) {                                \
+        ast_string[0] = '\0';                                                  \
+        expr_vec_stringify(&ast, ast_string, 0);                               \
+        puts(ast_string);                                                      \
+    }
+
+#define ADD_OPTIMIZATION(NAME)                                                 \
+    expr_vec_free(&previous_ast);                                              \
+    ADD_OPTIMIZATION_WO_FREE_AST(NAME)
+
 int main(int argc, char** argv)
 {
-    const char* text = "++++++++++[>+<-]";
-    printf("\ntext:%s\n\"%s\"%s\n", color_bright_green, text, color_reset);
-    Parser parser = parser_create(lexer_from_string(text, strlen(text)));
+    // const char* text = "++++++++++[>+<-]";
+    // printf("\ntext:%s\n\"%s\"%s\n", color_bright_green, text, color_reset);
+    // Parser parser = parser_create(lexer_from_string(text, strlen(text)));
 
-    // Parser parser = parser_create(lexer_from_args_or_stdin(argc, argv));
+    Parser parser = parser_create(lexer_from_args_or_stdin(argc, argv));
 
     char* ast_string = malloc(sizeof(char) * 33768);
     ast_string[0] = '\0';
@@ -42,44 +56,11 @@ int main(int argc, char** argv)
         if (!first) {
             expr_vec_free(&previous_ast);
         }
-        previous_ast = ast;
-        ast = optimize_fold_adjecent(&ast);
-        printf("%sfold_adjecent:%s\n", color_bold, color_reset);
-        if (!expr_vec_equal(&ast, &previous_ast)) {
-            ast_string[0] = '\0';
-            expr_vec_stringify(&ast, ast_string, 0);
-            puts(ast_string);
-        }
-
-        expr_vec_free(&previous_ast);
-        previous_ast = ast;
-        ast = optimize_eliminate_negation(&ast);
-        printf("%seliminate_negation:%s\n", color_bold, color_reset);
-        if (!expr_vec_equal(&ast, &previous_ast)) {
-            ast_string[0] = '\0';
-            expr_vec_stringify(&ast, ast_string, 0);
-            puts(ast_string);
-        }
-
-        expr_vec_free(&previous_ast);
-        previous_ast = ast;
-        ast = optimize_eliminate_overflow(&ast);
-        printf("%seliminate_overflow:%s\n", color_bold, color_reset);
-        if (!expr_vec_equal(&ast, &previous_ast)) {
-            ast_string[0] = '\0';
-            expr_vec_stringify(&ast, ast_string, 0);
-            puts(ast_string);
-        }
-
-        expr_vec_free(&previous_ast);
-        previous_ast = ast;
-        ast = optimize_replace_zeroing_loops(&ast);
-        printf("%sreplace_zeroing_loops:%s\n", color_bold, color_reset);
-        if (!expr_vec_equal(&ast, &previous_ast)) {
-            ast_string[0] = '\0';
-            expr_vec_stringify(&ast, ast_string, 0);
-            puts(ast_string);
-        }
+        ADD_OPTIMIZATION_WO_FREE_AST(fold_adjecent);
+        ADD_OPTIMIZATION(eliminate_negation);
+        ADD_OPTIMIZATION(eliminate_overflow);
+        ADD_OPTIMIZATION(replace_zeroing_loops);
+        ADD_OPTIMIZATION(replace_copying_loops);
 
         if (first) {
             first = false;
@@ -112,11 +93,14 @@ int main(int argc, char** argv)
 
     printf("\n%scode:%s\n", color_bold, color_reset);
 
-    for (size_t y = 0; y < 8; ++y) {
-        for (size_t x = 0; x < 8; ++x) {
+    for (size_t y = 0; y < 40; ++y) {
+        for (size_t x = 0; x < 16; ++x) {
             uint8_t v = ((uint8_t*)code)[y * 8 + x];
             if (v == 0) {
                 fputs(color_gray, stdout);
+            }
+            if (x == 8) {
+                fputc(' ', stdout);
             }
             printf("%02x ", v);
             fputs(color_reset, stdout);
@@ -135,7 +119,7 @@ int main(int argc, char** argv)
 
     printf("\n%smemory:%s\n", color_bold, color_reset);
 
-    for (size_t y = 0; y < 8; ++y) {
+    for (size_t y = 0; y < 4; ++y) {
         for (size_t x = 0; x < 8; ++x) {
             uint8_t v = memory[y * 8 + x];
             if (v == 0) {

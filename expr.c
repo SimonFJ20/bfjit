@@ -40,6 +40,24 @@ Expr expr_vec_pop(ExprVec* vec)
     return vec->data[vec->length];
 }
 
+void expr_vec_stringify(ExprVec* vec, char* acc, int depth)
+{
+    strcat(acc, color_bold);
+    strcat(acc, expr_bracket_color(depth));
+    strcat(acc, "[");
+    strcat(acc, color_reset);
+    for (size_t i = 0; i < vec->length; ++i) {
+        if (i != 0) {
+            strcat(acc, " ");
+        }
+        expr_stringify(&vec->data[i], acc, depth + 1);
+    }
+    strcat(acc, color_bold);
+    strcat(acc, expr_bracket_color(depth));
+    strcat(acc, "]");
+    strcat(acc, color_reset);
+}
+
 bool expr_vec_equal(const ExprVec* self, const ExprVec* other)
 {
     if (self->length != other->length) {
@@ -51,6 +69,16 @@ bool expr_vec_equal(const ExprVec* self, const ExprVec* other)
         }
     }
     return true;
+}
+
+ExprVec expr_vec_clone(const ExprVec* original)
+{
+    ExprVec vec;
+    expr_vec_construct(&vec);
+    for (size_t i = 0; i < original->length; ++i) {
+        expr_vec_push(&vec, expr_clone(&original->data[i]));
+    }
+    return vec;
 }
 
 void expr_free(Expr* expr)
@@ -89,24 +117,6 @@ void expr_stringify_concat_value(Expr* expr, char* acc, int depth)
     strcat(acc, color_bold);
     strcat(acc, expr_bracket_color(depth));
     strcat(acc, ")");
-    strcat(acc, color_reset);
-}
-
-void expr_vec_stringify(ExprVec* vec, char* acc, int depth)
-{
-    strcat(acc, color_bold);
-    strcat(acc, expr_bracket_color(depth));
-    strcat(acc, "[");
-    strcat(acc, color_reset);
-    for (size_t i = 0; i < vec->length; ++i) {
-        if (i != 0) {
-            strcat(acc, " ");
-        }
-        expr_stringify(&vec->data[i], acc, depth + 1);
-    }
-    strcat(acc, color_bold);
-    strcat(acc, expr_bracket_color(depth));
-    strcat(acc, "]");
     strcat(acc, color_reset);
 }
 
@@ -163,6 +173,12 @@ void expr_stringify(Expr* expr, char* acc, int depth)
             strcat(acc, "Zero");
             strcat(acc, color_reset);
             break;
+        case ExprType_Add:
+            strcat(acc, color_cyan);
+            strcat(acc, "Add");
+            strcat(acc, color_reset);
+            expr_stringify_concat_value(expr, acc, depth);
+            break;
     }
 }
 
@@ -189,4 +205,16 @@ bool expr_equal(const Expr* self, const Expr* other)
             break;
     }
     return true;
+}
+
+Expr expr_clone(const Expr* expr)
+{
+    if (expr->type == ExprType_Loop) {
+        return (Expr) {
+            .type = ExprType_Loop,
+            .exprs = expr_vec_clone(&expr->exprs),
+        };
+    } else {
+        return *expr;
+    }
 }

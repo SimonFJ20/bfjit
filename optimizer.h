@@ -15,4 +15,6 @@ Expr expr_optimize_eliminate_overflow(const Expr* expr);
 ExprVec optimize_replace_zeroing_loops(const ExprVec* vec);
 Expr expr_optimize_replace_zeroing_loops(const Expr* expr);
 
+ExprVec optimize_replace_copying_loops(const ExprVec* vec);
+
 #endif

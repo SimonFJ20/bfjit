@@ -14,6 +14,7 @@ typedef enum {
     ExprType_Input,
     ExprType_Loop,
     ExprType_Zero,
+    ExprType_Add,
 } ExprType;
 
 typedef struct Expr Expr;
@@ -29,7 +30,9 @@ void expr_vec_destroy(ExprVec* vec);
 void expr_vec_free(ExprVec* vec);
 void expr_vec_push(ExprVec* vec, Expr expr);
 Expr expr_vec_pop(ExprVec* vec);
+void expr_vec_stringify(ExprVec* vec, char* acc, int depth);
 bool expr_vec_equal(const ExprVec* self, const ExprVec* other);
+ExprVec expr_vec_clone(const ExprVec* original);
 
 struct Expr {
     ExprType type;
@@ -42,8 +45,9 @@ struct Expr {
 void expr_free(Expr* expr);
 const char* expr_bracket_color(int depth);
 void expr_stringify_concat_value(Expr* expr, char* acc, int depth);
-void expr_vec_stringify(ExprVec* vec, char* acc, int depth);
+void expr_stringify_concat_pair(Expr* expr, char* acc, int depth);
 void expr_stringify(Expr* expr, char* acc, int depth);
 bool expr_equal(const Expr* self, const Expr* other);
+Expr expr_clone(const Expr* expr);
 
 #endif

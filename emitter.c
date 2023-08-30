@@ -11,6 +11,7 @@ Emitter emitter_create(uint8_t* code_address)
         .pos = 0,
         .loop_counter = 0,
         .cmp_flags_set = false,
+        .rax_contains_copy = false,
     };
 }
 
@@ -52,6 +53,9 @@ void emitter_push_u64(Emitter* emitter, uint64_t value)
     emitter->pos += 1;
 }
 
+inline bool is_8(int value) { return value >= -128 && value <= 127; }
+inline bool is_16(int value) { return value >= -32768 && value <= 32767; }
+
 void emitter_emit_expr(Emitter* emitter, Expr* expr)
 {
     emitter->cmp_flags_set = false;
@@ -61,32 +65,48 @@ void emitter_emit_expr(Emitter* emitter, Expr* expr)
             exit(1);
             break;
         case ExprType_Incr:
-            // add BYTE [rbx], 1
+            // add BYTE [rbx], <value, rel8>
             emitter_push_u8(emitter, 0x80);
             emitter_push_u8(emitter, 0x03);
-            emitter_push_u8(emitter, expr->value);
+            emitter_push_u8(emitter, (uint8_t)expr->value);
             emitter->cmp_flags_set = true;
             break;
         case ExprType_Decr:
-            // sub BYTE [rbx], 1
+            // sub BYTE [rbx], <value: rel8>
             emitter_push_u8(emitter, 0x80);
             emitter_push_u8(emitter, 0x2b);
-            emitter_push_u8(emitter, expr->value);
+            emitter_push_u8(emitter, (uint8_t)expr->value);
             emitter->cmp_flags_set = true;
             break;
         case ExprType_Left:
-            // sub rbx, 1
-            emitter_push_u8(emitter, 0x48);
-            emitter_push_u8(emitter, 0x83);
-            emitter_push_u8(emitter, 0xeb);
-            emitter_push_u8(emitter, expr->value);
+            if (is_8(expr->value)) {
+                // sub rbx, <value: rel8>
+                emitter_push_u8(emitter, 0x48);
+                emitter_push_u8(emitter, 0x83);
+                emitter_push_u8(emitter, 0xeb);
+                emitter_push_u8(emitter, (uint8_t)expr->value);
+            } else {
+                // sub rbx, <value: rel32>
+                emitter_push_u8(emitter, 0x48);
+                emitter_push_u8(emitter, 0x81);
+                emitter_push_u8(emitter, 0xeb);
+                emitter_push_u32(emitter, expr->value);
+            }
             break;
         case ExprType_Right:
-            // add rbx, 1
-            emitter_push_u8(emitter, 0x48);
-            emitter_push_u8(emitter, 0x83);
-            emitter_push_u8(emitter, 0xc3);
-            emitter_push_u8(emitter, expr->value);
+            if (is_8(expr->value)) {
+                // add rbx, <value: rel8>
+                emitter_push_u8(emitter, 0x48);
+                emitter_push_u8(emitter, 0x83);
+                emitter_push_u8(emitter, 0xc3);
+                emitter_push_u8(emitter, (uint8_t)expr->value);
+            } else {
+                // add rbx, <value: rel32>
+                emitter_push_u8(emitter, 0x48);
+                emitter_push_u8(emitter, 0x81);
+                emitter_push_u8(emitter, 0xc3);
+                emitter_push_u32(emitter, expr->value);
+            }
             break;
         case ExprType_Output:
             // movzx edi, BYTE [rbx]
@@ -124,6 +144,30 @@ void emitter_emit_expr(Emitter* emitter, Expr* expr)
             emitter_push_u8(emitter, 0x00);
             emitter->cmp_flags_set = true;
             break;
+        case ExprType_Add:
+            if (!emitter->rax_contains_copy) {
+                // movzx rax, BYTE [rbx]
+                emitter_push_u8(emitter, 0x48);
+                emitter_push_u8(emitter, 0x0f);
+                emitter_push_u8(emitter, 0xb6);
+                emitter_push_u8(emitter, 0x03);
+                emitter->rax_contains_copy = true;
+            }
+            if (is_8(expr->value)) {
+                // add BYTE [rbx + <value: rel8>], al
+                emitter_push_u8(emitter, 0x00);
+                emitter_push_u8(emitter, 0x43);
+                emitter_push_u8(emitter, (uint8_t)expr->value);
+            } else {
+                // add BYTE [rbx + <value: rel32>], al
+                emitter_push_u8(emitter, 0x00);
+                emitter_push_u8(emitter, 0x83);
+                emitter_push_u32(emitter, expr->value);
+            }
+            break;
+    }
+    if (expr->type != ExprType_Add) {
+        emitter->rax_contains_copy = false;
     }
 }
 

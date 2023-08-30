@@ -4,9 +4,9 @@
 /*
  *  fold adjecent
  *
- *  A(N) :: { Incr(N) | Decr(N) | Right(N) | Left(N) }
+ *  A(n) :: { Incr(n) | Decr(n) | Right(n) | Left(n) }
  *
- *  [A(N1) A(N2)] -> [A(N1 + N2)]
+ *  [A(n1) A(n2)] -> [A(n1 + n2)]
  *
  */
 
@@ -49,20 +49,20 @@ Expr expr_optimize_fold_adjecent(const Expr* expr)
             .exprs = optimize_fold_adjecent(&expr->exprs),
         };
     } else {
-        return *expr;
+        return expr_clone(expr);
     }
 }
 
 /*
  *  eliminate negation
  *
- *  A(N), B(N) :: { Incr(N) | Decr(N) | Right(N) | Left(N) }
+ *  A(n), B(n) :: { Incr(n) | Decr(n) | Right(n) | Left(n) }
  *
- *  [A(N) B(N)] = []
+ *  [A(n) B(n)] = []
  *
- *  [A(N1) B(N2)] ? N1 == N2 -> []
- *  [A(N1) B(N2)] ? N1 < N2 -> [B(N2 - N1)]
- *  [A(N1) B(N2)] ? N1 > N2 -> [A(N1 - N2)]
+ *  [A(n1) B(n2)] ? n1 == n2 -> []
+ *  [A(n1) B(n2)] ? n1 < n2 -> [B(n2 - n1)]
+ *  [A(n1) B(n2)] ? n1 > n2 -> [A(n1 - n2)]
  *
  */
 
@@ -140,18 +140,18 @@ Expr expr_optimize_eliminate_negation(const Expr* expr)
             .exprs = optimize_eliminate_negation(&expr->exprs),
         };
     } else {
-        return *expr;
+        return expr_clone(expr);
     }
 }
 
 /*
  *  eliminate overflow
  *
- *  A(N) :: { Incr(N) | Decr(N) | Right(N) | Left(N) }
+ *  A(n) :: { Incr(n) | Decr(n) | Right(n) | Left(n) }
  *
- *  N > 255
+ *  n > 255
  *
- *  A(N) -> A(N % 256)
+ *  A(n) -> A(n % 256)
  *
  */
 
@@ -175,18 +175,18 @@ Expr expr_optimize_eliminate_overflow(const Expr* expr)
     } else if (expr->value > 255) {
         return (Expr) { .type = expr->type, .value = expr->value % 256 };
     } else {
-        return *expr;
+        return expr_clone(expr);
     }
 }
 
 /*
  *  replace zeroing loops
  *
- *  A(N) :: { Incr(N) | Decr(N) }
+ *  A(n) :: { Incr(n) | Decr(n) }
  *
- *  N % 2 == 1
+ *  n % 2 == 1
  *
- *  Loop[A(N)] -> Zero
+ *  Loop[A(n)] -> Zero
  *
  */
 
@@ -217,6 +217,67 @@ Expr expr_optimize_replace_zeroing_loops(const Expr* expr)
             };
         }
     } else {
-        return *expr;
+        return expr_clone(expr);
     }
+}
+
+/*
+ *  replace copying loops
+ *
+ *  O(n), I(n) :: { Left(n) | Right(n) }
+ *
+ *  O != I
+ *
+ *  [Loop[O(n) Incr(1) I(n) Decr(1)]] -> [Copy(n) Zero]
+ *
+ */
+
+ExprVec optimize_replace_copying_loops(const ExprVec* original)
+{
+    ExprVec result;
+    expr_vec_construct(&result);
+    for (size_t i = 0; i < original->length; ++i) {
+        const Expr* expr = &original->data[i];
+        if (expr->type == ExprType_Loop) {
+            const ExprVec* loop = &expr->exprs;
+            if (loop->length == 4
+                && ((loop->data[0].type == ExprType_Left
+                     && loop->data[2].type == ExprType_Right)
+                    || (loop->data[0].type == ExprType_Right
+                        && loop->data[2].type == ExprType_Left))
+                && loop->data[1].type == ExprType_Incr
+                && loop->data[3].type == ExprType_Decr
+                && loop->data[1].value == loop->data[3].value) {
+                if (loop->data[0].type == ExprType_Right) {
+                    expr_vec_push(
+                        &result,
+                        (Expr) {
+                            .type = ExprType_Add,
+                            .value = loop->data[0].value,
+                        }
+                    );
+                } else {
+                    expr_vec_push(
+                        &result,
+                        (Expr) {
+                            .type = ExprType_Add,
+                            .value = -loop->data[0].value,
+                        }
+                    );
+                }
+                expr_vec_push(&result, (Expr) { .type = ExprType_Zero });
+            } else {
+                expr_vec_push(
+                    &result,
+                    (Expr) {
+                        .type = ExprType_Loop,
+                        .exprs = optimize_replace_copying_loops(&expr->exprs),
+                    }
+                );
+            }
+        } else {
+            expr_vec_push(&result, expr_clone(expr));
+        }
+    }
+    return result;
 }
